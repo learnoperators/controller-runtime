@@ -19,11 +19,14 @@ package zap
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"io/ioutil"
+	"os"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 	kapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -294,5 +297,136 @@ var _ = Describe("Zap logger setup", func() {
 			})
 			defineTests()
 		})
+	})
+})
+
+var _ = Describe("Zap flag options setup", func() {
+	var (
+		fromFlags Options
+		fs        flag.FlagSet
+	)
+
+	BeforeEach(func() {
+		fromFlags = Options{}
+		fs = *flag.NewFlagSet(os.Args[0], flag.ExitOnError) //flags are now reset
+	})
+
+	Context("with -zap-devel options provided", func() {
+		It("Should set dev=true.", func() {
+			args := []string{"--zap-devel=true"}
+			fromFlags.BindFlags(&fs)
+			if err := fs.Parse(args); err != nil {
+				Expect(err).ToNot(HaveOccurred())
+			}
+			out := Options{}
+			UseFlagOptions(&fromFlags)(&out)
+
+			Expect(out.Development).To(BeTrue())
+			Expect(out.Encoder).To(BeNil())
+			Expect(out.Level).To(BeNil())
+			Expect(out.StacktraceLevel).To(BeNil())
+			Expect(out.EncoderConfigOptions).To(BeNil())
+		})
+		It("Should set dev=false with log options.", func() {
+			args := []string{"--zap-log-level=2"}
+			fromFlags.BindFlags(&fs)
+			if err := fs.Parse(args); err != nil {
+				Expect(err).ToNot(HaveOccurred())
+			}
+			out := Options{}
+			UseFlagOptions(&fromFlags)(&out)
+
+			Expect(out.Development).To(BeFalse())
+			Expect(out.Level.Enabled(zapcore.ErrorLevel)).To(BeTrue())
+
+		})
+	})
+	Context("with direct Options provided, and no Flag values", func() {
+
+		It("Should set dev=true, and default ConsoleEncoder with EpochTime stated in o.addDefaults()", func() {
+			logOut := new(bytes.Buffer)
+			log := New(UseDevMode(true), WriteTo(logOut))
+			log.Info("This is a test message")
+			outRaw := logOut.Bytes()
+			// Assert for default Epoch Time format
+			Expect(string(outRaw)).Should(ContainSubstring("-"))
+			// Assert for Console Encoder
+			res := map[string]interface{}{}
+			Expect(json.Unmarshal(outRaw, &res)).ToNot(Succeed())
+
+		})
+		It("Should set dev=false, and JSON encoder with EpochNanosTime stated in o.addDefaults()", func() {
+			logOut := new(bytes.Buffer)
+			log := New(UseDevMode(false), TimeEncoder(zapcore.EpochNanosTimeEncoder), WriteTo(logOut))
+			log.Info("This is a test message")
+			outRaw := logOut.Bytes()
+			// Assert for  Epoch Nanos time format
+			Expect(string(outRaw)).ShouldNot(ContainSubstring("."))
+			// Assert for JSON Encoder
+			res := map[string]interface{}{}
+			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+
+		})
+	})
+
+	Context("with -zap-encoder and -zap-time-encoder options provided.", func() {
+
+		It("Should set JSON Encoder, with given TimEncoder options.", func() {
+			args := []string{"-zap-encoder=json", "-zap-time-encoder=millis"}
+			fromFlags.BindFlags(&fs)
+			if err := fs.Parse(args); err != nil {
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			logOut := new(bytes.Buffer)
+			log := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			log.Info("This is a test message")
+			outRaw := logOut.Bytes()
+
+			// Assert for millis Time format
+			Expect(string(outRaw)).Should(ContainSubstring("."))
+			// Assert for JSON Encoder
+			res := map[string]interface{}{}
+			Expect(json.Unmarshal(outRaw, &res)).To(Succeed())
+		})
+
+		It("Should set Console Encoder, with given TimEncoder options.", func() {
+			args := []string{"-zap-encoder=console", "-zap-time-encoder=nanos"}
+			fromFlags.BindFlags(&fs)
+			if err := fs.Parse(args); err != nil {
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			logOut := new(bytes.Buffer)
+			log := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			log.Info("This is a test message")
+			outRaw := logOut.Bytes()
+
+			// Assert for nanos Time format
+			Expect(string(outRaw)).ToNot(ContainSubstring("."))
+			// Assert for CONSOLE Encoder
+			res := map[string]interface{}{}
+			Expect(json.Unmarshal(outRaw, &res)).ToNot(Succeed())
+		})
+
+		It("Should set Console Encoder, with default epoch time format.", func() {
+			args := []string{"-zap-encoder=console", "-zap-time-encoder=dummyyyy"}
+			fromFlags.BindFlags(&fs)
+			if err := fs.Parse(args); err != nil {
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			logOut := new(bytes.Buffer)
+			log := New(UseFlagOptions(&fromFlags), WriteTo(logOut))
+			log.Info("This is a test message")
+			outRaw := logOut.Bytes()
+
+			// Assert for default Epoch Time format
+			Expect(string(outRaw)).To(ContainSubstring("."))
+			// Assert for CONSOLE Encoder
+			res := map[string]interface{}{}
+			Expect(json.Unmarshal(outRaw, &res)).ToNot(Succeed())
+		})
+
 	})
 })

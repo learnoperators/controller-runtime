@@ -19,11 +19,11 @@ limitations under the License.
 package zap
 
 import (
+	"flag"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -42,11 +42,11 @@ var levelStrings = map[string]zapcore.Level{
 }
 
 type encoderFlag struct {
-	setFunc func(zapcore.Encoder)
+	setFunc func(NewEncoderFunc)
 	value   string
 }
 
-var _ pflag.Value = &encoderFlag{}
+var _ flag.Value = &encoderFlag{}
 
 func (ev *encoderFlag) String() string {
 	return ev.value
@@ -60,9 +60,9 @@ func (ev *encoderFlag) Set(flagValue string) error {
 	val := strings.ToLower(flagValue)
 	switch val {
 	case "json":
-		ev.setFunc(newJSONEncoder())
+		ev.setFunc(newJSONEncoder)
 	case "console":
-		ev.setFunc(newConsoleEncoder())
+		ev.setFunc(newConsoleEncoder)
 	default:
 		return fmt.Errorf("invalid encoder value \"%s\"", flagValue)
 	}
@@ -70,14 +70,29 @@ func (ev *encoderFlag) Set(flagValue string) error {
 	return nil
 }
 
-func newJSONEncoder() zapcore.Encoder {
-	encoderConfig := zap.NewProductionEncoderConfig()
-	return zapcore.NewJSONEncoder(encoderConfig)
+type timeEncoderFlag struct {
+	setFunc func(zapcore.TimeEncoder)
+	value   string
 }
 
-func newConsoleEncoder() zapcore.Encoder {
-	encoderConfig := zap.NewDevelopmentEncoderConfig()
-	return zapcore.NewConsoleEncoder(encoderConfig)
+var _ flag.Value = &timeEncoderFlag{}
+
+func (ev *timeEncoderFlag) String() string {
+	return ev.value
+}
+
+func (ev *timeEncoderFlag) Type() string {
+	return "timeencoder"
+}
+
+func (ev *timeEncoderFlag) Set(flagValue string) error {
+	var encoder zapcore.TimeEncoder
+	if err := encoder.UnmarshalText([]byte(flagValue)); err != nil {
+		return fmt.Errorf("unable to unmarshal, \"%s\"", flagValue)
+	}
+	ev.setFunc(encoder)
+	ev.value = flagValue
+	return nil
 }
 
 type levelFlag struct {
@@ -85,7 +100,7 @@ type levelFlag struct {
 	value   string
 }
 
-var _ pflag.Value = &levelFlag{}
+var _ flag.Value = &levelFlag{}
 
 func (ev *levelFlag) Set(flagValue string) error {
 	level, validLevel := levelStrings[strings.ToLower(flagValue)]
@@ -119,7 +134,7 @@ type stackTraceFlag struct {
 	value   string
 }
 
-var _ pflag.Value = &stackTraceFlag{}
+var _ flag.Value = &stackTraceFlag{}
 
 func (ev *stackTraceFlag) Set(flagValue string) error {
 	level, validLevel := levelStrings[strings.ToLower(flagValue)]
