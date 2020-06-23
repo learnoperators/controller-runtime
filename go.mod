@@ -17,8 +17,8 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/prometheus/client_golang v1.0.0
 	github.com/prometheus/client_model v0.2.0
-	github.com/spf13/pflag v1.0.5
 	go.uber.org/atomic v1.4.0 // indirect
+	go.uber.org/zap v1.10.0
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	gomodules.xyz/jsonpatch/v2 v2.0.1
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
